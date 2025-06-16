@@ -1,0 +1,83 @@
+name: Build and Push Cloudsmith Datadog Agent on New Tag
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  check-tags-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v3
+
+      - name: Fetch latest upstream tag
+        run: |
+          git ls-remote --tags https://github.com/DataDog/integrations-extras.git | \
+          grep "refs/tags/cloudsmith-" | \
+          sed 's/.*\///' | \
+          grep -v '\^{}' | \
+          sort -V | \
+          tail -n 1 > latest-tag.txt
+          
+          cat latest-tag.txt
+          LATEST_TAG=$(cat latest-tag.txt)
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "ERROR: No valid upstream tag found!"
+            exit 1
+          fi
+
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+
+          # Extract version number (strip prefix)
+          IMAGE_VERSION=$(echo "$LATEST_TAG" | sed 's/cloudsmith-//')
+
+          if [ -z "$IMAGE_VERSION" ]; then
+            echo "ERROR: Could not extract IMAGE_VERSION!"
+            exit 1
+          fi
+
+          echo "IMAGE_VERSION=$IMAGE_VERSION" >> $GITHUB_ENV
+
+      - name: Compare with last built version
+        run: |
+          LAST_VERSION_FILE=".last-built-version"
+          LAST_VERSION=$(cat $LAST_VERSION_FILE || echo "none")
+          echo "Last built: $LAST_VERSION"
+          echo "Latest tag: ${{ env.LATEST_TAG }} → IMAGE_VERSION=${{ env.IMAGE_VERSION }}"
+
+          if [[ "$LAST_VERSION" != "${{ env.LATEST_TAG }}" ]]; then
+            echo "build_needed=true" >> $GITHUB_ENV
+          else
+            echo "build_needed=false" >> $GITHUB_ENV
+          fi
+
+
+      - name: Install and authenticate Cloudsmith CLI
+        uses: cloudsmith-io/cloudsmith-cli-action@v1.0.3
+        with:
+          oidc-namespace: ${{ vars.CLOUDSMITH_NAMESPACE }}
+          oidc-service-slug: ${{ vars.CLOUDSMITH_SVC_SLUG }}
+
+      - name: Build and push image
+        if: env.build_needed == 'true'
+        run: |
+          echo "Building image with tag: ${{ env.IMAGE_VERSION }}"
+
+          docker build --build-arg CLOUDSMITH_CLI_VERSION=${{ env.IMAGE_VERSION }} -t docker.cloudsmith.io/${{ vars.CLOUDSMITH_NAMESPACE }}/cloudsmith-datadog-agent/cloudsmith-datadog-agent:${{ env.IMAGE_VERSION }} .
+          echo "${CLOUDSMITH_API_KEY}" | docker login docker.cloudsmith.io -u ${{ vars.CLOUDSMITH_SVC_SLUG }} --password-stdin
+          docker push docker.cloudsmith.io/${{ vars.CLOUDSMITH_NAMESPACE }}/cloudsmith-datadog-agent/cloudsmith-datadog-agent:${{ env.IMAGE_VERSION }}
+
+          echo "${{ env.LATEST_TAG }}" > .last-built-version
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .last-built-version
+          git commit -m "Record built version ${{ env.LATEST_TAG }}"
+          git push
