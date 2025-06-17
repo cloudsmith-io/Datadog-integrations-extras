@@ -79,7 +79,7 @@ jobs:
         if: env.build_needed == 'true'
         run: |
           
-          echo "${{ secrets.DOCKERHUB_PAT }}" | docker login docker.cloudsmith.io -u ${{ vars.DOCKERHUB_USER }} --password-stdin
+          echo "${{ secrets.DOCKERHUB_PAT }}" | docker login -u ${{ vars.DOCKERHUB_USER }} --password-stdin
           docker push cloudsmith/cloudsmith-datadog-agent:${{ env.IMAGE_VERSION }}
           
           echo "${{ env.LATEST_TAG }}" > .last-built-version
