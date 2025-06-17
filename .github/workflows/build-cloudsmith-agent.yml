@@ -66,15 +66,22 @@ jobs:
           oidc-namespace: ${{ vars.CLOUDSMITH_NAMESPACE }}
           oidc-service-slug: ${{ vars.CLOUDSMITH_SVC_SLUG }}
 
-      - name: Build and push image
+      - name: Build and push image to Cloudsmith
         if: env.build_needed == 'true'
         run: |
           echo "Building image with tag: ${{ env.IMAGE_VERSION }}"
 
-          docker build --build-arg CLOUDSMITH_CLI_VERSION=${{ env.IMAGE_VERSION }} -t docker.cloudsmith.io/${{ vars.CLOUDSMITH_NAMESPACE }}/cloudsmith-datadog-agent/cloudsmith-datadog-agent:${{ env.IMAGE_VERSION }} .
+          docker build --build-arg INTEGRATION_VERSION=${{ env.IMAGE_VERSION }} -t docker.cloudsmith.io/${{ vars.CLOUDSMITH_NAMESPACE }}/cloudsmith-datadog-agent/cloudsmith-datadog-agent:${{ env.IMAGE_VERSION }} .
           echo "${CLOUDSMITH_API_KEY}" | docker login docker.cloudsmith.io -u ${{ vars.CLOUDSMITH_SVC_SLUG }} --password-stdin
           docker push docker.cloudsmith.io/${{ vars.CLOUDSMITH_NAMESPACE }}/cloudsmith-datadog-agent/cloudsmith-datadog-agent:${{ env.IMAGE_VERSION }}
 
+      - name: Push image to DockerHub
+        if: env.build_needed == 'true'
+        run: |
+          
+          echo "${{ secrets.DOCKERHUB_PAT }}" | docker login docker.cloudsmith.io -u ${{ vars.DOCKERHUB_USER }} --password-stdin
+          docker push cloudsmith/cloudsmith-datadog-agent:${{ env.IMAGE_VERSION }}
+          
           echo "${{ env.LATEST_TAG }}" > .last-built-version
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
