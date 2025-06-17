@@ -78,7 +78,7 @@ jobs:
       - name: Push image to DockerHub
         if: env.build_needed == 'true'
         run: |
-          
+          docker tag docker.cloudsmith.io/${{ vars.CLOUDSMITH_NAMESPACE }}/cloudsmith-datadog-agent/cloudsmith-datadog-agent:${{ env.IMAGE_VERSION }} cloudsmith/cloudsmith-datadog-agent:${{ env.IMAGE_VERSION }}
           echo "${{ secrets.DOCKERHUB_PAT }}" | docker login -u ${{ vars.DOCKERHUB_USER }} --password-stdin
           docker push cloudsmith/cloudsmith-datadog-agent:${{ env.IMAGE_VERSION }}
           
